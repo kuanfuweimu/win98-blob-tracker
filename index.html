@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BlobTrack 98</title>
+<link rel="stylesheet" href="css/win98.css">
+</head>
+<body>
+<div class="desktop" id="desktop">
+  <div class="window main" id="mainWin">
+    <div class="title-bar">
+      <div class="title-bar-text"><canvas class="app-ico" width="16" height="16"></canvas><span>BlobTrack 98 - <span id="docName">未命名</span></span></div>
+      <div class="title-bar-controls">
+        <button aria-label="最小化"><svg width="6" height="2"><rect width="6" height="2"/></svg></button>
+        <button aria-label="最大化"><svg width="9" height="9"><path d="M0 0h9v9H0zM1 2v6h7V2z" fill-rule="evenodd"/></svg></button>
+        <button aria-label="关闭" id="mainClose"><svg width="8" height="7" viewBox="0 0 8 7"><path d="M0 0h2v1h1v1h2V1h1V0h2v1H7v1H6v1H5v1h1v1h1v1h1v1H6V6H5V5H3v1H2v1H0V6h1V5h1V4h1V3H2V2H1V1H0z"/></svg></button>
+      </div>
+    </div>
+    <div class="menubar">
+      <div class="menu"><button>文件(<u>F</u>)</button><div class="menu-pop">
+        <button data-act="open">打开图片 / 视频...<span>Ctrl+O</span></button>
+        <button data-act="paste">从剪贴板粘贴<span>Ctrl+V</span></button>
+        <button data-act="demo">载入示例图</button><hr>
+        <button data-act="png">导出 PNG...<span>Ctrl+S</span></button>
+        <button data-act="rec">录制 WebM</button><hr>
+        <button data-act="reset">恢复默认设置</button>
+      </div></div>
+      <div class="menu"><button>查看(<u>V</u>)</button><div class="menu-pop">
+        <button data-act="fit">适合窗口</button>
+        <button data-act="zoom">实际像素 100%</button><hr>
+        <button data-act="play">播放 / 暂停<span>空格</span></button>
+      </div></div>
+      <div class="menu"><button>预设(<u>P</u>)</button><div class="menu-pop" id="presetMenu"></div></div>
+      <div class="menu"><button>帮助(<u>H</u>)</button><div class="menu-pop">
+        <button data-act="refs">参考资料：液体与气泡</button>
+        <button data-act="tokens">文字模板变量</button><hr>
+        <button data-act="about">关于 BlobTrack 98</button>
+      </div></div>
+    </div>
+    <div class="toolbar">
+      <button class="btn slim" data-act="open">打开...</button>
+      <button class="btn slim" data-act="demo">示例</button>
+      <div class="sep"></div>
+      <button class="btn slim on" id="playBtn" data-act="play">播放</button>
+      <button class="btn slim on" id="fitBtn" data-act="fit">适合窗口</button>
+      <button class="btn slim" id="zoomBtn" data-act="zoom">100%</button>
+      <button class="btn slim on" id="dropBtn" data-act="drop" title="在画面上拖动产生水波">搅水</button>
+      <div class="sep"></div>
+      <button class="btn slim" data-act="png">导出 PNG</button>
+      <button class="btn slim" id="recBtn" data-act="rec">录制 WebM</button>
+      <div class="sep"></div>
+      <button class="btn slim" data-act="refs">参考资料</button>
+      <label>预设 <select id="presetSel" style="width:150px"><option value="">— 选择 —</option></select></label>
+    </div>
+    <div class="body">
+      <div class="view fit tool-drop sunken" id="view"><div class="view-inner"><canvas id="out" width="2" height="2"></canvas></div></div>
+      <div class="panel"><div class="tabs" id="tabs"></div><div class="tab-body" id="tabBody"></div></div>
+    </div>
+    <div class="statusbar">
+      <div class="status-field" id="stMsg">就绪。拖入、粘贴或打开一张图片。</div>
+      <div class="status-field fixed" id="stBlobs">blob 0</div>
+      <div class="status-field fixed" id="stSize">-</div>
+      <div class="status-field fixed" id="stFps" style="width:90px">-</div>
+    </div>
+  </div>
+</div>
+
+<div class="start-menu" id="startMenu">
+  <div class="start-side"><span>BlobTrack<b>98</b></span></div>
+  <div class="start-items">
+    <button data-act="open">打开图片 / 视频...</button>
+    <button data-act="demo">载入示例图</button>
+    <hr><div class="start-head">预设</div>
+    <div id="startPresets"></div>
+    <hr>
+    <button data-act="refs">参考资料</button>
+    <button data-act="about">关于</button>
+  </div>
+</div>
+<div class="taskbar">
+  <button class="btn start" id="startBtn"><canvas class="app-ico" width="16" height="16"></canvas>开始</button>
+  <div class="sep" style="width:2px;height:22px;border-left:1px solid #808080;border-right:1px solid #fff"></div>
+  <div id="tasks" style="display:flex;gap:3px;min-width:0;overflow:hidden"></div>
+  <div class="tray" id="clock">00:00</div>
+</div>
+<input type="file" id="file" accept="image/*,video/*" hidden>
+
+<script src="js/detect.js"></script>
+<script src="js/effects.js"></script>
+<script src="js/render.js"></script>
+<script src="js/refs.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
