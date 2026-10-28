@@ -21,9 +21,11 @@
       <div class="menu"><button>文件(<u>F</u>)</button><div class="menu-pop">
         <button data-act="open">打开图片 / 视频...<span>Ctrl+O</span></button>
         <button data-act="paste">从剪贴板粘贴<span>Ctrl+V</span></button>
+        <button data-act="camera">打开摄像头</button>
         <button data-act="demo">载入示例图</button><hr>
         <button data-act="png">导出 PNG...<span>Ctrl+S</span></button>
-        <button data-act="rec">录制 WebM</button><hr>
+        <button data-act="vexport">导出整段视频...</button>
+        <button data-act="rec">定时录制 N 秒</button><hr>
         <button data-act="reset">恢复默认设置</button>
       </div></div>
       <div class="menu"><button>查看(<u>V</u>)</button><div class="menu-pop">
@@ -41,6 +43,7 @@
     <div class="toolbar">
       <button class="btn slim" data-act="open">打开...</button>
       <button class="btn slim" data-act="demo">示例</button>
+      <button class="btn slim" data-act="camera">摄像头</button>
       <div class="sep"></div>
       <button class="btn slim on" id="playBtn" data-act="play">播放</button>
       <button class="btn slim on" id="fitBtn" data-act="fit">适合窗口</button>
@@ -48,7 +51,8 @@
       <button class="btn slim on" id="dropBtn" data-act="drop" title="在画面上拖动产生水波">搅水</button>
       <div class="sep"></div>
       <button class="btn slim" data-act="png">导出 PNG</button>
-      <button class="btn slim" id="recBtn" data-act="rec">录制 WebM</button>
+      <button class="btn slim" data-act="vexport">导出视频</button>
+      <button class="btn slim" id="recBtn" data-act="rec">录制</button>
       <div class="sep"></div>
       <button class="btn slim" data-act="refs">参考资料</button>
       <label>预设 <select id="presetSel" style="width:150px"><option value="">— 选择 —</option></select></label>
@@ -56,6 +60,16 @@
     <div class="body">
       <div class="view fit tool-drop sunken" id="view"><div class="view-inner"><canvas id="out" width="2" height="2"></canvas></div></div>
       <div class="panel"><div class="tabs" id="tabs"></div><div class="tab-body" id="tabBody"></div></div>
+    </div>
+    <div class="videobar" id="videoBar" hidden>
+      <button class="btn slim" id="vbPlay" style="width:72px">❚❚ 暂停</button>
+      <button class="btn slim vb-file" id="vbStart" title="回到开头">|◀</button>
+      <input type="range" class="vb-file" id="vbSeek" min="0" max="1000" value="0">
+      <div class="status-field" id="vbTime">00:00.0 / 00:00.0</div>
+      <label class="vb-file">倍速 <select id="vbSpeed" style="width:64px"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1">1×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label>
+      <label class="check vb-file"><input type="checkbox" id="vbLoop">循环</label>
+      <label class="check vb-file"><input type="checkbox" id="vbSound">声音</label>
+      <button class="btn slim" data-act="vexport">导出整段视频</button>
     </div>
     <div class="statusbar">
       <div class="status-field" id="stMsg">就绪。拖入、粘贴或打开一张图片。</div>
@@ -84,7 +98,7 @@
   <div id="tasks" style="display:flex;gap:3px;min-width:0;overflow:hidden"></div>
   <div class="tray" id="clock">00:00</div>
 </div>
-<input type="file" id="file" accept="image/*,video/*" hidden>
+<input type="file" id="file" accept="image/*,video/*,.mp4,.webm,.mov,.m4v,.mkv" hidden>
 
 <script src="js/detect.js"></script>
 <script src="js/effects.js"></script>

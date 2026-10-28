@@ -54,6 +54,7 @@
     bubColor: '#ffffff', bubChars: 'o°Oo0',
 
     workMax: 1280, recSec: 6, recFps: 30, recMbps: 8,
+    vidFormat: 'auto', vidAudio: true, vidSound: false, vidLoop: true, vidSpeed: 1,
   };
 
   const PRESETS = {
@@ -186,8 +187,20 @@
     ]],
     ['out', '输出', [
       fs('分辨率', rg('workMax', '工作分辨率 (长边)', 480, 4096, 16), hint('导出 PNG 就是这个尺寸。原图更大时会等比缩小。')),
-      fs('录制 WebM', rg('recSec', '时长 (秒)', 1, 60, 1), rg('recFps', '帧率', 10, 60, 1), rg('recMbps', '码率 Mbps', 1, 40, 1)),
-      { legend: '操作', items: [{ t: 'buttons', list: [['导出 PNG', 'png'], ['录制 WebM', 'rec'], ['恢复默认', 'reset']] }] },
+      fs('视频输入',
+        hint('打开 / 拖入视频文件 (mp4 / webm / mov)，或使用摄像头。视频会逐帧检测并按编号持续追踪。'),
+        { t: 'buttons', list: [['打开视频...', 'open'], ['摄像头', 'camera']] }),
+      fs('视频导出',
+        sel('vidFormat', '格式', [['auto', '自动 (MP4 优先)'], ['mp4', 'MP4 (H.264)'], ['webm', 'WebM (VP9)']]),
+        chk('vidAudio', '包含原视频声音'),
+        rg('recFps', '帧率', 10, 60, 1), rg('recMbps', '码率 Mbps', 1, 40, 1),
+        hint('导出整段：从头把输入视频完整播放一遍，边处理边录制，耗时约等于视频时长。'),
+        { t: 'buttons', list: [['导出整段视频', 'vexport']] }),
+      fs('定时录制',
+        rg('recSec', '时长 (秒)', 1, 120, 1),
+        hint('图片或摄像头：录制当前画面 N 秒；再点一次提前结束。'),
+        { t: 'buttons', list: [['录制 N 秒', 'rec']] }),
+      { legend: '操作', items: [{ t: 'buttons', list: [['导出 PNG', 'png'], ['恢复默认', 'reset']] }] },
     ]],
   ];
 
@@ -287,7 +300,7 @@
   const fx = new BT.FX();
   const tracker = new BT.Tracker();
   let src = null, W = 0, H = 0, srcData = null, det = null, prevAn = null;
-  let needSetup = false, needDetect = false, dirty = true;
+  let needSetup = false, needDetect = false, needGrab = false, dirty = true;
   let playing = true, t = 0, frame = 0, last = performance.now(), fpsAcc = 0, fpsN = 0, fps = 0;
 
   BT.makeDemo = function (w, h, seed) {
@@ -313,10 +326,21 @@
     return c;
   };
 
-  function loadSource(node, name, isVideo) {
+  function loadSource(node, name, isVideo, opts = {}) {
+    if (rec) { status('请先结束当前录制 / 导出。'); return; }
+    if (src && src.video) {
+      src.el.pause();
+      if (src.stream) src.stream.getTracks().forEach(tr => tr.stop());
+    }
     if (src && src.url) URL.revokeObjectURL(src.url);
-    src = { el: node, name, video: isVideo, url: node._url,
+    src = { el: node, name, video: isVideo, url: node._url, live: !!opts.live, stream: opts.stream || null,
       w: isVideo ? node.videoWidth : (node.naturalWidth || node.width), h: isVideo ? node.videoHeight : (node.naturalHeight || node.height) };
+    if (isVideo) {
+      node.addEventListener('seeked', () => { needGrab = true; needDetect = true; tracker.reset(); });
+      if (!opts.live) { node.loop = !!S.vidLoop; node.playbackRate = S.vidSpeed; }
+      playing = true; $('#playBtn').classList.add('on');
+    }
+    updateVideoBar(true);
     $('#docName').textContent = name;
     renderTasks();
     tracker.reset(); prevAn = null; t = 0; frame = 0;
@@ -326,9 +350,9 @@
   function loadFile(file) {
     if (!file) return;
     const url = URL.createObjectURL(file);
-    if (file.type.startsWith('video/')) {
+    if (file.type.startsWith('video/') || /\.(mp4|webm|mov|m4v|mkv|ogv)$/i.test(file.name)) {
       const v = document.createElement('video');
-      v.muted = true; v.loop = true; v.playsInline = true; v.src = url; v._url = url;
+      v.muted = !S.vidSound; v.loop = !!S.vidLoop; v.playsInline = true; v.preload = 'auto'; v.src = url; v._url = url;
       v.addEventListener('loadeddata', () => { loadSource(v, file.name, true); v.play(); }, { once: true });
       v.addEventListener('error', () => status('视频无法解码：' + file.name));
     } else if (file.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|avif)$/i.test(file.name)) {
@@ -388,7 +412,10 @@
 
   function render(dt) {
     if (!src) return;
-    if (src.video && !src.el.paused) { grab(); if (frame % Math.max(1, S.detEvery | 0) === 0) needDetect = true; }
+    if (src.video && (!src.el.paused || needGrab)) {
+      if (src.el.readyState >= 2) { grab(); if (needGrab || frame % Math.max(1, S.detEvery | 0) === 0) needDetect = true; }
+      needGrab = false;
+    }
     if (needDetect) detect();
     octx.imageSmoothingEnabled = false;
     if (anyFx()) { fx.step(dt, t, S); octx.drawImage(fx.canvas, 0, 0, W, H); }
@@ -408,6 +435,7 @@
       render(playing ? dt : 0);
       dirty = false;
     }
+    updateVideoBar();
     fpsAcc += dt; fpsN++;
     if (fpsAcc > 0.5) { fps = fpsN / fpsAcc; fpsAcc = 0; fpsN = 0; $('#stFps').textContent = `${fps.toFixed(0)} fps${playing ? '' : ' (暂停)'}`; }
     requestAnimationFrame(loop);
@@ -418,21 +446,161 @@
   BT.status = status;
   function stamp() { const d = new Date(), p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
   function download(blob, name) { const a = el('a', { href: URL.createObjectURL(blob), download: name }); document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); }
+  /* ---------- video I/O ---------- */
   let rec = null;
+  const MIMES = {
+    mp4: ['video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4;codecs=avc1', 'video/mp4'],
+    webm: ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm;codecs=vp9', 'video/webm'],
+  };
+  function pickMime() {
+    const order = S.vidFormat === 'webm' ? MIMES.webm : S.vidFormat === 'mp4' ? [...MIMES.mp4, ...MIMES.webm] : [...MIMES.mp4, ...MIMES.webm];
+    const m = order.find(x => MediaRecorder.isTypeSupported(x)) || '';
+    if (S.vidFormat === 'mp4' && !m.startsWith('video/mp4')) status('这个浏览器不支持录制 MP4，已改用 WebM。');
+    return { mime: m, ext: m.startsWith('video/mp4') ? 'mp4' : 'webm' };
+  }
+  /* Route element audio through Web Audio so it can be recorded while the speaker output stays independently mutable. */
+  function ensureAudio(v) {
+    if (v._dest) return v._dest;
+    try {
+      const ac = BT.audioCtx || (BT.audioCtx = new (window.AudioContext || window.webkitAudioContext)());
+      if (ac.state === 'suspended') ac.resume();
+      const s = ac.createMediaElementSource(v), dest = ac.createMediaStreamDestination(), g = ac.createGain();
+      g.gain.value = S.vidSound ? 1 : 0;
+      s.connect(dest); s.connect(g); g.connect(ac.destination);
+      v._dest = dest; v._gain = g; v.muted = false;
+      return dest;
+    } catch (e) { return null; }
+  }
+  function setSound(on) {
+    S.vidSound = on; save();
+    if (!src || !src.video || src.live) return;
+    if (src.el._gain) src.el._gain.gain.value = on ? 1 : 0;
+    else src.el.muted = !on;
+  }
+  function makeRecorder(withAudio) {
+    if (!window.MediaRecorder || !out.captureStream) { msgBox('视频导出', '这个浏览器不支持 Canvas 录制，请用新版 Chrome / Edge。'); return null; }
+    const stream = out.captureStream(S.recFps);
+    if (withAudio && src && src.video && !src.live) {
+      const dest = ensureAudio(src.el);
+      const at = dest && dest.stream.getAudioTracks()[0];
+      if (at) stream.addTrack(at);
+    }
+    const { mime, ext } = pickMime();
+    const chunks = [];
+    const r = new MediaRecorder(stream, Object.assign({ videoBitsPerSecond: S.recMbps * 1e6 }, mime ? { mimeType: mime } : {}));
+    r.ondataavailable = e => e.data.size && chunks.push(e.data);
+    return { r, chunks, ext, type: (mime || 'video/webm').split(';')[0] };
+  }
   function record() {
     if (rec) { rec.stop(); return; }
-    if (!window.MediaRecorder || !out.captureStream) { msgBox('录制', '这个浏览器不支持 Canvas 录制。请用 Chrome / Edge。'); return; }
-    const mime = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find(m => MediaRecorder.isTypeSupported(m));
-    const stream = out.captureStream(S.recFps);
-    const chunks = [];
-    rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: S.recMbps * 1e6 });
-    rec.ondataavailable = e => e.data.size && chunks.push(e.data);
-    rec.onstop = () => { download(new Blob(chunks, { type: 'video/webm' }), `blobtrack_${stamp()}.webm`); rec = null; $('#recBtn').classList.remove('on'); status('录制完成，已下载 WebM。'); };
+    const R = makeRecorder(S.vidAudio);
+    if (!R) return;
+    rec = R.r;
+    rec.onstop = () => {
+      download(new Blob(R.chunks, { type: R.type }), `blobtrack_${stamp()}.${R.ext}`);
+      rec = null; $('#recBtn').classList.remove('on'); status(`录制完成，已下载 ${R.ext.toUpperCase()}。`);
+    };
     playing = true; $('#playBtn').classList.add('on');
-    rec.start(200); $('#recBtn').classList.add('on');
+    if (src.video && src.el.paused) src.el.play();
+    rec.start(250); $('#recBtn').classList.add('on');
     let left = S.recSec;
-    status(`录制中… ${left}s`);
+    status(`录制中… ${left}s（再点“录制”可提前结束）`);
     const iv = setInterval(() => { left--; if (!rec) { clearInterval(iv); return; } status(`录制中… ${left}s`); if (left <= 0) { clearInterval(iv); rec.stop(); } }, 1000);
+  }
+  function progressWin(title, onCancel) {
+    const bar = el('div', { class: 'progress-fill' }), txt = el('div', { text: '准备中…' });
+    const cancel = el('button', { class: 'btn', text: '取消' });
+    const body = el('div', { style: 'padding:6px 4px' }, txt, el('div', { class: 'progress sunken', style: 'margin:8px 0 10px' }, bar), el('div', { class: 'msg-actions' }, cancel));
+    const win = BT.makeWindow('progWin', title, 380, 150, body, { onClose: onCancel });
+    win.style.height = 'auto';
+    cancel.addEventListener('click', onCancel);
+    return {
+      set(f, s) { bar.style.width = Math.round(Math.max(0, Math.min(1, f)) * 100) + '%'; txt.textContent = s; },
+      close() { win.remove(); renderTasks(); },
+    };
+  }
+  async function exportVideo() {
+    if (!src) return;
+    if (rec) { status('正在录制 / 导出中。'); return; }
+    if (!src.video || src.live) { record(); return; }
+    const v = src.el;
+    const R = makeRecorder(S.vidAudio);
+    if (!R) return;
+    const keep = { loop: v.loop, rate: v.playbackRate };
+    let cancelled = false, done = false, iv = 0;
+    const finish = () => {
+      if (done) return; done = true;
+      v.removeEventListener('ended', onEnd);
+      if (rec && rec.state !== 'inactive') rec.stop();
+    };
+    const onEnd = () => finish();
+    const pw = progressWin('正在导出视频…', () => { cancelled = true; v.pause(); finish(); });
+    v.pause(); v.loop = false; v.playbackRate = 1;
+    tracker.reset(); prevAn = null; t = 0; frame = 0; fx.bubbles.length = 0;
+    await new Promise(res => { v.addEventListener('seeked', res, { once: true }); v.currentTime = 0; });
+    rec = R.r;
+    rec.onstop = () => {
+      clearInterval(iv);
+      rec = null; $('#recBtn').classList.remove('on');
+      v.loop = keep.loop; v.playbackRate = keep.rate;
+      pw.close();
+      if (cancelled) { status('已取消视频导出。'); }
+      else {
+        download(new Blob(R.chunks, { type: R.type }), `blobtrack_${(src.name || 'video').replace(/\.[^.]+$/, '')}_${stamp()}.${R.ext}`);
+        status(`视频导出完成（${R.ext.toUpperCase()}，${W}×${H}，${S.recFps} fps）。`);
+      }
+      if (v.loop) v.play();
+    };
+    v.addEventListener('ended', onEnd);
+    playing = true; $('#playBtn').classList.add('on'); $('#recBtn').classList.add('on');
+    rec.start(250);
+    try { await v.play(); } catch (e) { cancelled = true; finish(); msgBox('视频导出', '视频无法播放：' + e.message); return; }
+    iv = setInterval(() => {
+      const d = isFinite(v.duration) ? v.duration : 0;
+      pw.set(d ? v.currentTime / d : 0, `${fmtTime(v.currentTime)} / ${d ? fmtTime(d) : '--:--'}   ${R.ext.toUpperCase()} ${W}×${H}`);
+    }, 200);
+  }
+  async function startCamera() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { msgBox('摄像头', '这个浏览器不支持摄像头，或页面不是 https / 本地文件。'); return; }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+      const v = document.createElement('video');
+      v.muted = true; v.playsInline = true; v.srcObject = stream;
+      await v.play();
+      if (v.readyState < 2) await new Promise(res => v.addEventListener('loadeddata', res, { once: true }));
+      loadSource(v, '摄像头', true, { live: true, stream });
+    } catch (e) { msgBox('摄像头', '无法打开摄像头：' + (e.message || e.name)); }
+  }
+  function fmtTime(s) { s = Math.max(0, s || 0); return `${String(Math.floor(s / 60)).padStart(2, '0')}:${(s % 60).toFixed(1).padStart(4, '0')}`; }
+  let seeking = false;
+  function updateVideoBar(force) {
+    const bar = $('#videoBar');
+    const isV = !!(src && src.video);
+    if (bar.hidden === isV) { bar.hidden = !isV; fitCanvas(); }
+    if (!isV) return;
+    const v = src.el;
+    if (force) {
+      bar.classList.toggle('live', src.live);
+      $('#vbLoop').checked = !!S.vidLoop; $('#vbSound').checked = !!S.vidSound; $('#vbSpeed').value = String(S.vidSpeed);
+    }
+    $('#vbPlay').textContent = v.paused ? '▶ 播放' : '❚❚ 暂停';
+    if (src.live) { $('#vbTime').textContent = '● LIVE  ' + src.w + '×' + src.h; return; }
+    const d = isFinite(v.duration) ? v.duration : 0;
+    if (!seeking) $('#vbSeek').value = d ? Math.round(v.currentTime / d * 1000) : 0;
+    $('#vbTime').textContent = `${fmtTime(v.currentTime)} / ${fmtTime(d)}`;
+  }
+  function initVideoBar() {
+    $('#vbPlay').addEventListener('click', () => act('play'));
+    $('#vbStart').addEventListener('click', () => { if (src && src.video && !src.live) src.el.currentTime = 0; });
+    const sk = $('#vbSeek');
+    sk.addEventListener('input', () => {
+      seeking = true;
+      if (src && src.video && !src.live && isFinite(src.el.duration)) src.el.currentTime = sk.value / 1000 * src.el.duration;
+    });
+    sk.addEventListener('change', () => { seeking = false; });
+    $('#vbSpeed').addEventListener('change', e => { S.vidSpeed = parseFloat(e.target.value); save(); if (src && src.video && !src.live) src.el.playbackRate = S.vidSpeed; });
+    $('#vbLoop').addEventListener('change', e => { S.vidLoop = e.target.checked; save(); if (src && src.video && !src.live) src.el.loop = S.vidLoop; });
+    $('#vbSound').addEventListener('change', e => setSound(e.target.checked));
   }
   async function pasteClipboard() {
     try {
@@ -452,6 +620,8 @@
       case 'demo': loadSource(BT.makeDemo(1280, 800), 'demo_orange_sea.bmp', false); break;
       case 'png': if (src) out.toBlob(b => { download(b, `blobtrack_${stamp()}.png`); status(`已导出 PNG ${W}×${H}`); }, 'image/png'); break;
       case 'rec': if (src) record(); break;
+      case 'vexport': exportVideo(); break;
+      case 'camera': startCamera(); break;
       case 'reset': S = Object.assign({}, D); save(); syncUI(); needSetup = true; dirty = true; status('已恢复默认设置。'); break;
       case 'play': playing = !playing; $('#playBtn').classList.toggle('on', playing); dirty = true; if (src && src.video) playing ? src.el.play() : src.el.pause(); break;
       case 'fit': $('#view').classList.add('fit'); $('#fitBtn').classList.add('on'); $('#zoomBtn').classList.remove('on'); fitCanvas(); break;
@@ -600,7 +770,7 @@
   function clock() { const d = new Date(); $('#clock').textContent = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; }
 
   window.addEventListener('DOMContentLoaded', () => {
-    buildUI(); initMenus(); initInput();
+    buildUI(); initMenus(); initInput(); initVideoBar();
     document.querySelectorAll('canvas.app-ico').forEach(drawIcon);
     clock(); setInterval(clock, 10000);
     renderTasks();

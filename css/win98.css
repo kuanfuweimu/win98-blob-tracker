@@ -165,6 +165,14 @@ input[type=color]::-moz-color-swatch { border: 1px solid #000; }
 .start-items hr { width: 100%; border: 0; border-top: 1px solid var(--shadow); border-bottom: 1px solid var(--hl); margin: 2px 0; }
 .start-head { padding: 2px 10px; color: var(--shadow); }
 #startPresets { display: flex; flex-direction: column; }
+.videobar { display: flex; align-items: center; gap: 6px; padding: 3px 2px 4px; flex: none; }
+.videobar input[type=range] { flex: 1; min-width: 80px; }
+.videobar #vbTime { flex: none; width: 150px; font-variant-numeric: tabular-nums; }
+.videobar label { display: flex; align-items: center; gap: 4px; white-space: nowrap; margin: 0; }
+.videobar.live .vb-file { display: none; }
+.videobar.live #vbTime { flex: 1; width: auto; color: #800000; }
+.progress { height: 22px; padding: 3px; background: #fff; }
+.progress-fill { height: 100%; width: 0; background: repeating-linear-gradient(90deg, var(--title-a) 0 9px, transparent 9px 11px); }
 @media (max-width: 820px) {
   .body { flex-direction: column; }
   .view { flex: none; height: 46vh; }
